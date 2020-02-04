@@ -1,6 +1,5 @@
 // -lws2_32
 #include <iostream>
-#include <sstream>
 #include <string>
 #include <ws2tcpip.h>
 #include <winsock2.h>
@@ -25,7 +24,7 @@ void recvHandler() {
       std::cout << "\r" << std::string(buf, 0, bytesCount);
 
       if (msg.length() > bytesCount) {
-        std::cout << std::string(msg.length() - bytesCount, ' ');
+        std::cout << std::string(msg.length() - bytesCount + 2, ' ');
       }
 
       std::cout << std::endl << "> " << msg;
@@ -63,8 +62,6 @@ int main() {
   hint.sin_family = AF_INET;
   hint.sin_port = htons(port);
   hint.sin_addr.S_un.S_addr = inet_addr(ip.c_str());
-
-  // inet_pton(AF_INET, ip.c_str(), &hint.sin_addr);
 
   iRes = connect(sock, (sockaddr*)&hint, sizeof(hint));
   if (iRes == SOCKET_ERROR) {

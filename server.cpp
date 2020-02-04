@@ -1,6 +1,5 @@
 // -lws2_32
 #include <iostream>
-#include <sstream>
 #include <string>
 // #include <map>
 #include <ws2tcpip.h>
@@ -10,6 +9,20 @@
 // #define SERVER_PORT "27015"
 #define SERVER_PORT 27015
 #define BUFLEN 1024
+
+fd_set master;
+SOCKET listening;
+
+void broadcast(SOCKET author, std::string message) {
+  std::cout << message << std::endl;
+
+  for (int i = 0; i < master.fd_count; i++) {
+    SOCKET out = master.fd_array[i];
+
+    if (out != listening && out != author)
+      send(out, message.c_str(), message.size() + 1, 0);
+  }
+}
 
 int main() {
   WSADATA wsaData;
@@ -47,7 +60,7 @@ int main() {
 
   // bind(listening, &hints.ai_addr, sizeof(hints.ai_addr));
 
-  SOCKET listening = socket(AF_INET, SOCK_STREAM, 0);
+  listening = socket(AF_INET, SOCK_STREAM, 0);
   sockaddr_in hint;
   hint.sin_family = AF_INET;
   hint.sin_port = htons(SERVER_PORT);
@@ -57,9 +70,9 @@ int main() {
 
   listen(listening, SOMAXCONN);
 
-  fd_set master;
   FD_ZERO(&master);
   FD_SET(listening, &master);
+
 
   bool running = true;
   while (running) {
@@ -85,30 +98,38 @@ int main() {
 
           std::string greeting = "Welcome!\r";
           send(client, greeting.c_str(), greeting.size() + 1, 0);
+
+          broadcast(client, std::to_string(client) + " connected");
         // }
       } else {
         char buf[BUFLEN];
         ZeroMemory(buf, BUFLEN);
 
         int bytesCount = recv(sock, buf, BUFLEN, 0);
-        if (bytesCount == 0) {
+        if (bytesCount <= 0) {
           closesocket(sock);
           FD_CLR(sock, &master);
+          broadcast(sock, std::to_string(sock) + " disconnected");
         } else {
-          for (int i = 0; i < master.fd_count; i++) {
-            SOCKET out = master.fd_array[i];
-            if (out != listening && out != sock) {
-              std::ostringstream ss;
-              ss << "<" << sock << "> " << buf << "\r";
-
-              std::string msg = ss.str();
-              std::cout << msg << std::endl;
-              send(out, msg.c_str(), msg.size() + 1, 0);
-            }
-          }
+          broadcast(sock, "<" + std::to_string(sock) + "> " + std::string(buf));
         }
       }
     }
   }
+
+  FD_CLR(listening, &master);
+  closesocket(listening);
+
+  std::string msg = "Shutting down...";
+
+  while (master.fd_count > 0) {
+    SOCKET sock = master.fd_array[0];
+    send(sock, msg.c_str(), msg.size() + 1, 0);
+    FD_CLR(sock, &master);
+    closesocket(sock);
+  }
+
+  WSACleanup();
+
   return 0;
 }
