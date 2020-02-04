@@ -72,6 +72,23 @@ int main() {
     return 1;
   }
 
+  std::string nickname = "";
+
+  while (true) {
+    while(nickname.length() == 0) {
+      std::cout << "Enter your nickname: ";
+      std::cin >> nickname;
+    }
+
+    std::string sending = "conn:" + nickname;
+
+    iRes = send(sock, sending.c_str(), sending.length() + 1, 0);
+    if (iRes == SOCKET_ERROR)
+      std::cout << "\r---Error # " + std::to_string(WSAGetLastError()) + ": Failed to send this message---" << std::endl;
+    else
+      break;
+  }
+
   std::thread recvThr(recvHandler);
   recvThr.detach();
 
@@ -141,8 +158,8 @@ int main() {
       std::cout << tmp << ' ' << std::string(tmp.length()+1, '\b');
       x--;
     } else if (ch == 13) {  // Enter
-      iRes = send(sock, msg.c_str(), msg.length() + 1, 0);
-
+      std::string sending = nickname + ':' + msg;
+      iRes = send(sock, sending.c_str(), sending.length() + 1, 0);
       if (iRes == SOCKET_ERROR)  {
 
         std::string errMsg = "\r---Error # " + std::to_string(WSAGetLastError()) + ": Failed to send this message---";
@@ -153,11 +170,10 @@ int main() {
 
         std::cout << std::endl << "> " << msg;
       } else {
+        x = -1;
         std::cout << "\r<you> " << msg << std::endl << "> ";
         msg.clear();
-        x = -1;
       }
-    } else if (ch == 3) { // CTRL+C
     }
   }
 

@@ -1,7 +1,9 @@
 // -lws2_32
 #include <iostream>
+#include <sstream>
 #include <string>
-// #include <map>
+#include <vector>
+#include <utility>
 #include <ws2tcpip.h>
 #include <winsock2.h>
 
@@ -12,6 +14,17 @@
 
 fd_set master;
 SOCKET listening;
+
+std::vector<std::string> split(std::string msg) {
+  std::stringstream splitting(msg);
+  std::string segment;
+  std::vector<std::string> seglist;
+
+  while(std::getline(splitting, segment, ':'))
+   seglist.push_back(segment);
+
+  return seglist;
+}
 
 void broadcast(SOCKET author, std::string message) {
   std::cout << message << std::endl;
@@ -33,7 +46,7 @@ int main() {
     return 1;
   }
 
-  // std::map<SOCKET, std::string> nicknames;
+  std::vector<std::pair<SOCKET, std::string> > nicknames;
 
   struct addrinfo hints;
   ZeroMemory(&hints, sizeof(hints));
@@ -82,33 +95,32 @@ int main() {
 
       if (sock == listening) {
         SOCKET client = accept(listening, nullptr, nullptr);
-
-        // char nickname[BUFLEN];
-        // ZeroMemory(nickname, BUFLEN);
-        // int bytesCount = recv(sock, nickname, BUFLEN, 0);
-
-        // if (bytesCount == 0) {
-        //   closesocket(client);
-        // } else {
-          FD_SET(client, &master);
-          // map.insert(pair<SOCKET, std::string>());
-
-          std::string greeting = "Welcome!\r";
-          send(client, greeting.c_str(), greeting.size() + 1, 0);
-
-          broadcast(client, std::to_string(client) + " connected");
-        // }
+        FD_SET(client, &master);
+        std::string greeting = "Welcome!\r";
+        send(client, greeting.c_str(), greeting.size() + 1, 0);
       } else {
         char buf[BUFLEN];
         ZeroMemory(buf, BUFLEN);
 
         int bytesCount = recv(sock, buf, BUFLEN, 0);
+        std::vector<std::string> msg = split(std::string(buf));
         if (bytesCount <= 0) {
+
+          for (int i = 0; i < nicknames.size(); i++) {
+            if (nicknames[i].first == sock) {
+              broadcast(sock, nicknames[i].second + " disconnected");
+              nicknames.erase(nicknames.begin() + i);
+              break;
+            }
+          }
+
           closesocket(sock);
           FD_CLR(sock, &master);
-          broadcast(sock, std::to_string(sock) + " disconnected");
+        } else if (msg[0] == "conn") {
+          nicknames.push_back(std::make_pair(sock, msg[1]));
+          broadcast(sock, msg[1] + " connected");
         } else {
-          broadcast(sock, "<" + std::to_string(sock) + "> " + std::string(buf));
+          broadcast(sock, "<" + msg[0] + "> " + msg[1]);
         }
       }
     }
