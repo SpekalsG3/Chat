@@ -42,25 +42,22 @@ int main() {
   hints.ai_protocol = IPPROTO_TCP;
   hints.ai_flags = AI_PASSIVE;
 
-  // struct addrinfo *result = nullptr;
-  // iRes = getaddrinfo(SERVER_ADDR, SERVER_PORT, &hints, &result);
-  // if (iRes != 0) {
-  //   std::cout << "getaddrinfo failed with error: " << iRes << std::endl;
-  //   WSACleanup();
-  //   std::cin.get();
-  //   return 1;
-  // }
+  // Resolving the server address and port
+  struct addrinfo *result = nullptr;
+  iRes = getaddrinfo(SERVER_ADDR, std::to_string(SERVER_PORT).c_str(), &hints, &result);
+  if (iRes != 0) {
+    std::cout << "getaddrinfo failed with error: " << iRes << std::endl;
+    WSACleanup();
+    std::cin.get();
+    return 1;
+  }
 
-  // SOCKET listening = socket(AF_INET, SOCK_STREAM, 0);
-  // if (listening == INVALID_SOCKET) {
-  //   std::cout << "Unable to create a socket" << std::endl;
-  //   std::cin.get();
-  //   return 1;
-  // }
-
-  // bind(listening, &hints.ai_addr, sizeof(hints.ai_addr));
-
-  listening = socket(AF_INET, SOCK_STREAM, 0);
+  listening = socket(result->ai_family, result->ai_socktype, result->ai_protocol);
+  if (listening == INVALID_SOCKET) {
+    std::cout << "Unable to create a socket" << std::endl;
+    std::cin.get();
+    return 1;
+  }
   sockaddr_in hint;
   hint.sin_family = AF_INET;
   hint.sin_port = htons(SERVER_PORT);
@@ -73,7 +70,7 @@ int main() {
   FD_ZERO(&master);
   FD_SET(listening, &master);
 
-
+  std::cout << "Started server" << std::endl;
   bool running = true;
   while (running) {
     fd_set copy = master;
