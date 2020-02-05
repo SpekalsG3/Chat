@@ -75,18 +75,27 @@ int main() {
   std::string nickname = "";
 
   while (true) {
-    while(nickname.length() == 0) {
-      std::cout << "Enter your nickname: ";
-      std::cin >> nickname;
-    }
+    std::cout << "Enter your nickname: ";
+    std::cin >> nickname;
 
     std::string sending = "conn:" + nickname;
 
-    iRes = send(sock, sending.c_str(), sending.length() + 1, 0);
+    iRes = send(sock, sending.c_str(), sending.length(), 0);
     if (iRes == SOCKET_ERROR)
       std::cout << "\r---Error # " + std::to_string(WSAGetLastError()) + ": Failed to send this message---" << std::endl;
-    else
-      break;
+    else {
+      char buf[2];
+      ZeroMemory(buf, 2);
+      int bytesCount = recv(sock, buf, 2, 0);
+      if (bytesCount <= 0)
+        std::cout << "\r---Error # " + std::to_string(WSAGetLastError()) + ": Failed to recv this message---" << std::endl;
+      else {
+        if (buf[0] == 'O' && buf[1] == 'K')
+          break;
+        else
+          std::cout << "This nickname is picked. Choose another one" << std::endl;
+      }
+    }
   }
 
   std::thread recvThr(recvHandler);
@@ -158,8 +167,8 @@ int main() {
       std::cout << tmp << ' ' << std::string(tmp.length()+1, '\b');
       x--;
     } else if (ch == 13) {  // Enter
-      std::string sending = nickname + ':' + msg;
-      iRes = send(sock, sending.c_str(), sending.length() + 1, 0);
+      std::string sending = "chat:" + msg;
+      iRes = send(sock, sending.c_str(), sending.length(), 0);
       if (iRes == SOCKET_ERROR)  {
 
         std::string errMsg = "\r---Error # " + std::to_string(WSAGetLastError()) + ": Failed to send this message---";

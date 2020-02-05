@@ -3,7 +3,6 @@
 #include <sstream>
 #include <string>
 #include <vector>
-#include <utility>
 #include <ws2tcpip.h>
 #include <winsock2.h>
 
@@ -12,8 +11,21 @@
 #define SERVER_PORT 27015
 #define BUFLEN 1024
 
-fd_set master;
+class client{
+public:
+  client(SOCKET sock, std::string nickname, bool ready) {
+    this->sock = sock;
+    this->nickname = nickname;
+    this->ready = ready;
+  }
+
+  SOCKET sock;
+  std::string nickname;
+  bool ready;
+};
+
 SOCKET listening;
+std::vector<client> clients;
 
 std::vector<std::string> split(std::string msg) {
   std::stringstream splitting(msg);
@@ -29,11 +41,9 @@ std::vector<std::string> split(std::string msg) {
 void broadcast(SOCKET author, std::string message) {
   std::cout << message << std::endl;
 
-  for (int i = 0; i < master.fd_count; i++) {
-    SOCKET out = master.fd_array[i];
-
-    if (out != listening && out != author)
-      send(out, message.c_str(), message.size() + 1, 0);
+  for (const client& cl : clients) {
+    if (cl.sock != listening && cl.sock != author && cl.ready)
+      send(cl.sock, message.c_str(), message.size(), 0);
   }
 }
 
@@ -45,8 +55,6 @@ int main() {
     std::cin.get();
     return 1;
   }
-
-  std::vector<std::pair<SOCKET, std::string> > nicknames;
 
   struct addrinfo hints;
   ZeroMemory(&hints, sizeof(hints));
@@ -80,6 +88,7 @@ int main() {
 
   listen(listening, SOMAXCONN);
 
+  fd_set master;
   FD_ZERO(&master);
   FD_SET(listening, &master);
 
@@ -96,8 +105,6 @@ int main() {
       if (sock == listening) {
         SOCKET client = accept(listening, nullptr, nullptr);
         FD_SET(client, &master);
-        std::string greeting = "Welcome!\r";
-        send(client, greeting.c_str(), greeting.size() + 1, 0);
       } else {
         char buf[BUFLEN];
         ZeroMemory(buf, BUFLEN);
@@ -106,10 +113,10 @@ int main() {
         std::vector<std::string> msg = split(std::string(buf));
         if (bytesCount <= 0) {
 
-          for (int i = 0; i < nicknames.size(); i++) {
-            if (nicknames[i].first == sock) {
-              broadcast(sock, nicknames[i].second + " disconnected");
-              nicknames.erase(nicknames.begin() + i);
+          for (int i = 0; i < clients.size(); i++) {
+            if (clients[i].sock == sock) {
+              broadcast(sock, clients[i].nickname + " disconnected");
+              clients.erase(clients.begin() + i);
               break;
             }
           }
@@ -117,10 +124,28 @@ int main() {
           closesocket(sock);
           FD_CLR(sock, &master);
         } else if (msg[0] == "conn") {
-          nicknames.push_back(std::make_pair(sock, msg[1]));
-          broadcast(sock, msg[1] + " connected");
+          bool success = true;
+          for (int i = 0; i < clients.size(); i++) {
+            if (clients[i].nickname == msg[1]) {
+              send(sock, "WR", 2, 0);
+              success = false;
+              break;
+            }
+          }
+          if (success) {
+            std::string greeting = "OKWelcome!";
+
+            send(sock, greeting.c_str(), greeting.size(), 0);
+            clients.push_back({sock, msg[1], true});
+            broadcast(sock, msg[1] + " connected");
+          }
         } else {
-          broadcast(sock, "<" + msg[0] + "> " + msg[1]);
+          for (int i = 0; i < clients.size(); i++) {
+            if (clients[i].sock == sock) {
+              broadcast(sock, "<" + clients[i].nickname + "> " + msg[1]);
+              break;
+            }
+          }
         }
       }
     }
@@ -133,7 +158,7 @@ int main() {
 
   while (master.fd_count > 0) {
     SOCKET sock = master.fd_array[0];
-    send(sock, msg.c_str(), msg.size() + 1, 0);
+    send(sock, msg.c_str(), msg.size(), 0);
     FD_CLR(sock, &master);
     closesocket(sock);
   }
